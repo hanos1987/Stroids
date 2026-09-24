@@ -699,8 +699,6 @@ function updateBoss() {
   const f = b.hp / b.maxhp, ph = f > 0.66 ? 0 : f > 0.33 ? 1 : 2;
   if (ph !== b.phase) {
     b.phase = ph; b.cool = 70;
-    for (const e of ebs) fx.push({ type: 'spark', x: e.x, y: e.y, vx: 0, vy: -0.4, life: 16, col: '#ffffff' });
-    ebs.length = 0;
     explode(b.x + rnd(-20, 20), b.y + rnd(-10, 10), 'm');
     G.shake = 10;
     Sound.sfx.explodeL();

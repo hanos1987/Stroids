@@ -33,7 +33,7 @@ Open `index.html` in a browser. (You can also serve the folder with any static s
 - **Few buttons.** Fire is automatic, so you only move, focus and bomb.
 - **Forgiving deaths.** Dying costs one power level and one option, not everything. You also drop an orb to grab back and respawn with at least 2 bombs.
 - **Steady upgrades.** Carriers show up regularly, and there's a guaranteed drop every 30 kills.
-- **Fair enemy fire.** Enemies don't shoot from right on top of you. When a boss changes phase, its bullets are cleared and it pauses briefly.
+- **Fair enemy fire.** Enemies don't shoot from right on top of you. When a boss changes phase, it pauses briefly.
 - **Game feel:** a fixed 60 Hz update, screen shake, hit flashes, dithered fireball explosions and chiptune sound effects and music.
 
 ## SNES-style graphics
