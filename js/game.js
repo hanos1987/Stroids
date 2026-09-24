@@ -635,9 +635,9 @@ function updateStage() {
 //  Bosses
 // ------------------------------------------------------------
 const BOSSES = [
-  { name: 'WARDEN', hp: 750, hit: [[0, -2, 16], [-24, 9, 9], [24, 9, 9], [-31, 5, 8], [31, 5, 8]], y: 62 },
-  { name: 'STROID TITAN', hp: 1050, hit: [[0, 0, 33]], y: 66 },
-  { name: 'HIVE QUEEN', hp: 1350, hit: [[0, -6, 28], [-30, 5, 8], [30, 5, 8]], y: 58 },
+  { name: 'WARDEN', hp: 600, hit: [[0, -2, 16], [-24, 9, 9], [24, 9, 9], [-31, 5, 8], [31, 5, 8]], y: 62 },
+  { name: 'STROID TITAN', hp: 800, hit: [[0, 0, 33]], y: 66 },
+  { name: 'HIVE QUEEN', hp: 1000, hit: [[0, -6, 28], [-30, 5, 8], [30, 5, 8]], y: 58 },
 ];
 
 function spawnBoss() {
@@ -706,25 +706,28 @@ function updateBoss() {
     Sound.sfx.explodeL();
   }
   if (b.cool > 0) { b.cool--; return; }
+  if (P.dead) return; // hold fire while the player respawns
   const t = b.t;
   if (b.idx === 0) patternWarden(b, ph, t);
   else if (b.idx === 1) patternTitan(b, ph, t);
   else patternQueen(b, ph, t);
 }
 
+// Boss patterns are tuned to leave clear gaps: few streams at once, and
+// every pattern has a lane you can find by moving a little.
 function patternWarden(b, ph, t) {
   b.x = W / 2 + Math.sin(t * 0.012) * 50;
   const tur = s => [b.x + s * 24, b.y + 21];
   if (ph === 0) {
-    if (t % 70 === 0) for (const s of [-1, 1]) { const [x, y] = tur(s); spread(x, y, aim(x, y), 3, 0.22, 2); }
-    if (t % 140 === 70) ring(b.x, b.y + 2, 12, 1.4, t * 0.1, 'ebBig');
+    if (t % 90 === 0) for (const s of [-1, 1]) { const [x, y] = tur(s); spread(x, y, aim(x, y), 3, 0.3, 1.7); }
+    if (t % 180 === 90) ring(b.x, b.y + 2, 10, 1.2, t * 0.1, 'ebBig');
   } else if (ph === 1) {
-    if (t % 55 === 0) for (const s of [-1, 1]) { const [x, y] = tur(s); spread(x, y, aim(x, y), 5, 0.16, 2.2); }
-    if (t % 90 === 45) for (const s of [-1, 1]) spread(b.x + s * 35, b.y + 22, Math.PI / 2 + s * 0.3, 4, 0.15, 1.6, 'ebBlue');
-    if (t % 120 === 0) ring(b.x, b.y + 2, 16, 1.3, t * 0.05, 'ebBig');
+    if (t % 80 === 0) for (const s of [-1, 1]) { const [x, y] = tur(s); spread(x, y, aim(x, y), 3, 0.25, 1.9); }
+    if (t % 160 === 40) for (const s of [-1, 1]) spread(b.x + s * 35, b.y + 22, Math.PI / 2 + s * 0.3, 3, 0.2, 1.4, 'ebBlue');
+    if (t % 160 === 120) ring(b.x, b.y + 2, 12, 1.2, t * 0.05, 'ebBig');
   } else {
-    if (t % 5 === 0) { const a = t * 0.11; fireAt(b.x, b.y + 2, a, 1.6); fireAt(b.x, b.y + 2, a + Math.PI, 1.6); }
-    if (t % 65 === 0) for (const s of [-1, 1]) { const [x, y] = tur(s); spread(x, y, aim(x, y), 3, 0.2, 2.4, 'ebBlue'); }
+    if (t % 10 === 0) { const a = t * 0.07; fireAt(b.x, b.y + 2, a, 1.4); fireAt(b.x, b.y + 2, a + Math.PI, 1.4); }
+    if (t % 110 === 0) { const [x, y] = tur(t % 220 ? 1 : -1); fireAt(x, y, aim(x, y), 2, 'ebBlue'); }
   }
 }
 
@@ -732,21 +735,21 @@ function patternTitan(b, ph, t) {
   b.x = W / 2 + Math.sin(t * 0.008) * 40;
   b.y = b.d.y + Math.sin(t * 0.02) * 6;
   const can = s => [b.x + s * 20, b.y + 18], eye = [b.x, b.y + 6];
-  const throwRock = s => { const [x, y] = can(s); spawn('rockM', x, y, { vx: s * 0.6, vy: 1.4 }); };
+  const throwRock = s => { const [x, y] = can(s); spawn('rockM', x, y, { vx: s * 0.5, vy: 1.2 }); };
   if (ph === 0) {
-    if (t % 110 === 0) { throwRock(-1); throwRock(1); }
-    if (t % 60 === 30) spread(eye[0], eye[1], aim(eye[0], eye[1]), 5, 0.2, 2);
+    if (t % 160 === 0) throwRock(t % 320 ? 1 : -1);
+    if (t % 80 === 40) spread(eye[0], eye[1], aim(eye[0], eye[1]), 3, 0.28, 1.7);
   } else if (ph === 1) {
-    if (t % 40 === 0) ring(eye[0], eye[1], 14, 1.2, t * 0.03, 'ebBig');
-    if (t % 80 === 40) {
+    if (t % 80 === 0) ring(eye[0], eye[1], 10, 1.1, t * 0.03, 'ebBig');
+    if (t % 120 === 60) {
       const a = aim(eye[0], eye[1]);
-      for (let i = 0; i < 5; i++) later(i * 5, () => boss && fireAt(boss.x, boss.y + 6, a, 3, 'ebNeedle'));
+      for (let i = 0; i < 3; i++) later(i * 6, () => boss && fireAt(boss.x, boss.y + 6, a, 2.4, 'ebNeedle'));
     }
-    if (t % 150 === 75) throwRock(Math.random() < 0.5 ? -1 : 1);
+    if (t % 200 === 100) throwRock(Math.random() < 0.5 ? -1 : 1);
   } else {
-    if (t % 8 === 0) ring(eye[0], eye[1], 6, 1.5, t * 0.05);
-    if (t % 90 === 0) throwRock(t % 180 ? 1 : -1);
-    if (t % 70 === 35) for (const s of [-1, 1]) { const [x, y] = can(s); spread(x, y, aim(x, y), 3, 0.18, 2.6, 'ebNeedle'); }
+    if (t % 18 === 0) ring(eye[0], eye[1], 5, 1.3, t * 0.035);
+    if (t % 180 === 0) throwRock(t % 360 ? 1 : -1);
+    if (t % 120 === 60) { const [x, y] = can(t % 240 ? 1 : -1); spread(x, y, aim(x, y), 3, 0.25, 2, 'ebNeedle'); }
   }
 }
 
@@ -755,20 +758,20 @@ function patternQueen(b, ph, t) {
   b.y = b.d.y + Math.sin(t * 0.017) * 8;
   const eye = [b.x, b.y - 3], pod = s => [b.x + s * 30, b.y + 5];
   if (ph === 0) {
-    if (t % 7 === 0) {
-      const a = Math.PI / 2 + Math.sin(t * 0.03) * 1.1;
-      fireAt(eye[0], eye[1], a - 0.35, 1.8); fireAt(eye[0], eye[1], a + 0.35, 1.8);
+    if (t % 14 === 0) {
+      const a = Math.PI / 2 + Math.sin(t * 0.025) * 1.0;
+      fireAt(eye[0], eye[1], a - 0.4, 1.5); fireAt(eye[0], eye[1], a + 0.4, 1.5);
     }
-    if (t % 200 === 100) for (const s of [-1, 1]) { const [x, y] = pod(s); spawn('droneB', x, y, { beh: 'chase', vy: 1.2 }); }
+    if (t % 260 === 130) for (const s of [-1, 1]) { const [x, y] = pod(s); spawn('droneB', x, y, { beh: 'chase', vy: 1.1 }); }
   } else if (ph === 1) {
-    if (t % 40 === 0) ring(eye[0], eye[1], 18, 1.3, (t / 40) % 2 ? 0.17 : 0, 'ebBig');
-    if (t % 26 === 13) for (const s of [-1, 1]) { const [x, y] = pod(s); spread(x, y, aim(x, y), 3, 0.2, 2.1, 'ebBlue'); }
+    if (t % 80 === 0) ring(eye[0], eye[1], 12, 1.1, (t / 80) % 2 ? 0.26 : 0, 'ebBig');
+    if (t % 80 === 40) { const s = (t / 80) % 2 ? 1 : -1, [x, y] = pod(s); spread(x, y, aim(x, y), 3, 0.28, 1.8, 'ebBlue'); }
   } else {
-    if (t % 5 === 0) {
-      fireAt(eye[0], eye[1], t * 0.09, 1.7);
-      fireAt(eye[0], eye[1], -t * 0.09 + Math.PI, 1.7, 'ebBlue');
+    if (t % 11 === 0) {
+      fireAt(eye[0], eye[1], t * 0.06, 1.4);
+      fireAt(eye[0], eye[1], -t * 0.06 + Math.PI, 1.4, 'ebBlue');
     }
-    if (t % 110 === 0) spread(eye[0], eye[1], aim(eye[0], eye[1]), 5, 0.22, 2.2, 'ebBig');
+    if (t % 150 === 0) spread(eye[0], eye[1], aim(eye[0], eye[1]), 3, 0.3, 1.8, 'ebBig');
   }
 }
 
