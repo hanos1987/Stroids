@@ -107,7 +107,7 @@ function saveHi(v) { try { localStorage.setItem('stroids_hi', v); } catch (e) { 
 const G = {
   state: 'title', t: 0, stage: 0, loop: 0, stageT: 0, score: 0, hi: loadHi(),
   shake: 0, flash: 0, banner: null, scroll: 0, warn: 0, sched: [], waveIdx: 0, nextWave: 0,
-  kills: 0, nextExtend: 50000, clearT: 0, overT: 0, paused: false, bg: null,
+  kills: 0, nextExtend: 50000, livesFlash: 0, clearT: 0, overT: 0, paused: false, bg: null,
 };
 let P = null, shots = [], ebs = [], enemies = [], items = [], fx = [], boss = null;
 
@@ -204,7 +204,7 @@ const WEAPON_NAMES = ['VULCAN', 'LASER', 'HOMING'];
 const WEAPON_COLS = ['#ff8a1a', '#60f0ff', '#5ee06a'];
 
 function newPlayer() {
-  return { x: W / 2, y: H - 40, lives: 2, bombs: 3, power: 1, weapon: 0, options: 0, shield: false,
+  return { x: W / 2, y: H - 40, lives: 3, bombs: 3, power: 1, weapon: 0, options: 0, shield: false,
     inv: 120, dead: 0, fireT: 0, misT: 0, trail: [], bombT: 0, focus: false, hr: 1.5, vx: 0 };
 }
 
@@ -224,8 +224,9 @@ function updatePlayer(pad) {
   if (p.dead > 0) {
     p.dead--;
     if (p.dead === 0) {
-      if (p.lives < 0) { gameOver(); return; }
+      if (p.lives <= 0) { gameOver(); return; }
       p.x = W / 2; p.y = H - 30; p.inv = 150; p.bombs = Math.max(p.bombs, 2);
+      popText(p.x, p.y - 20, p.lives === 1 ? 'LAST LIFE!' : p.lives + ' LIVES LEFT', p.lives === 1 ? '#ff5050' : '#ffffff', 90);
       resetTrail();
       touch.sx = touch.cx; touch.sy = touch.cy; touch.px = p.x; touch.py = p.y;
     }
@@ -346,6 +347,7 @@ function hurtPlayer() {
   Sound.sfx.die();
   G.shake = 20; G.flash = 6;
   P.lives--;
+  G.livesFlash = 120;
   P.dead = 80;
   P.power = Math.max(1, P.power - 1);
   P.options = Math.max(0, P.options - 1);
@@ -911,6 +913,7 @@ function update() {
   fx = fx.filter(f => !f.dead);
   if (G.shake > 0) G.shake *= 0.85, G.shake < 0.5 && (G.shake = 0);
   if (G.flash > 0) G.flash--;
+  if (G.livesFlash > 0) G.livesFlash--;
   if (G.banner && --G.banner.t <= 0) G.banner = null;
   endFrameInput();
 }
@@ -958,10 +961,13 @@ function drawHUD() {
   drawText(ctx, String(G.score).padStart(8, '0'), 4, 10, '#ffffff');
   drawText(ctx, 'HI', W - 4, 3, '#8090c0', 1, 'right');
   drawText(ctx, String(G.hi).padStart(8, '0'), W - 4, 10, '#ffe070', 1, 'right');
-  // lives
-  for (let i = 0; i < Math.min(P.lives, 6); i++) ctx.drawImage(SPR.shipLife, 3 + i * 10, H - 12, 8, 9);
-  // bombs
-  for (let i = 0; i < P.bombs; i++) ctx.drawImage(SPR.itemB, 3 + i * 10, H - 23, 9, 9);
+  // lives (includes the ship you're flying) and bombs, each on a labeled row
+  const lf = G.livesFlash > 0 && (G.livesFlash >> 3) % 2;
+  drawText(ctx, 'LIVES', 4, H - 21, lf ? '#ff5050' : '#8090c0');
+  for (let i = 0; i < Math.min(P.lives, 5); i++) ctx.drawImage(SPR.shipLife, 26 + i * 9, H - 23, 8, 9);
+  if (P.lives > 5) drawText(ctx, '+' + (P.lives - 5), 72, H - 21, '#ffffff');
+  drawText(ctx, 'BOMBS', 4, H - 10, '#8090c0');
+  for (let i = 0; i < P.bombs; i++) ctx.drawImage(SPR.itemB, 26 + i * 9, H - 12, 8, 8);
   // weapon + power
   drawText(ctx, WEAPON_NAMES[P.weapon], W - 4, H - 18, WEAPON_COLS[P.weapon], 1, 'right');
   for (let i = 0; i < 5; i++) {
