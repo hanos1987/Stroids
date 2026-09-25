@@ -3,7 +3,7 @@
 //  STROIDS — main game
 // ============================================================
 const cv = document.getElementById('screen');
-const ctx = cv.getContext('2d');
+const ctx = cv.getContext('2d', { alpha: false, desynchronized: true });
 cv.width = W; cv.height = H;
 ctx.imageSmoothingEnabled = false;
 buildSprites();
@@ -106,7 +106,7 @@ function saveHi(v) { try { localStorage.setItem('stroids_hi', v); } catch (e) { 
 
 const G = {
   state: 'title', t: 0, stage: 0, loop: 0, stageT: 0, score: 0, hi: loadHi(),
-  shake: 0, flash: 0, banner: null, scroll: 0, warn: 0, sched: [], waveIdx: 0, nextWave: 0,
+  shake: 0, flash: 0, banner: null, scroll: 0, pscroll: 0, warn: 0, sched: [], waveIdx: 0, nextWave: 0,
   kills: 0, nextExtend: 50000, livesFlash: 0, clearT: 0, overT: 0, paused: false, bg: null,
 };
 let P = null, shots = [], ebs = [], enemies = [], items = [], fx = [], boss = null;
@@ -165,36 +165,49 @@ function makeBG(i) {
 }
 const BGS = [0, 1, 2].map(makeBG);
 
+const STAR_SPEED = [0.25, 0.6, 1.4];
+const starRate = () => (G.state === 'play' || G.state === 'title' ? 1 : 0.3);
+
+// Background motion runs on the fixed 60 Hz game clock, not per screen refresh
+function updateBG() {
+  const bg = G.bg;
+  if (!bg) return;
+  const k = starRate();
+  for (const s of bg.stars) {
+    s.y += STAR_SPEED[s.l] * k;
+    if (s.y > H) { s.y -= H; s.x = rnd(0, W); }
+  }
+  for (const d of bg.dust) {
+    d.y += d.sp;
+    if (d.y > H + 12) { d.y = -12; d.x = rnd(0, W); }
+  }
+}
+
 function drawBG(g) {
   const bg = G.bg;
+  const scroll = G.pscroll + (G.scroll - G.pscroll) * alpha;
   g.drawImage(bg.sky, 0, 0);
   // planet (very slow parallax)
   const pr = bg.th.planet.r, span = H + pr * 4;
-  const py = ((G.scroll * 0.06) % span) - pr * 2;
+  const py = ((scroll * 0.06) % span) - pr * 2;
   g.globalAlpha = 0.6;
   g.drawImage(bg.planet, Math.round(bg.th.planet.x - pr), Math.round(py - pr));
   g.globalAlpha = 1;
   // nebula
   g.globalAlpha = bg.th.nebA;
-  const ny = Math.floor((G.scroll * 0.25) % H);
+  const ny = Math.floor((scroll * 0.25) % H);
   g.drawImage(bg.neb, 0, ny);
   g.drawImage(bg.neb, 0, ny - H);
   g.globalAlpha = 1;
   // stars
-  const sp = [0.25, 0.6, 1.4];
+  const k = starRate() * alpha;
   for (const s of bg.stars) {
-    s.y += sp[s.l] * (G.state === 'play' || G.state === 'title' ? 1 : 0.3);
-    if (s.y > H) { s.y -= H; s.x = rnd(0, W); }
     const tw = s.l === 0 ? (Math.sin(G.t * 0.05 + s.tw) > 0.6 ? 2 : 0) : s.l;
     g.fillStyle = bg.th.star[tw];
-    g.fillRect(Math.floor(s.x), Math.floor(s.y), 1, s.l === 2 ? 3 : 1);
+    g.fillRect(Math.floor(s.x), Math.floor(s.y + STAR_SPEED[s.l] * k), 1, s.l === 2 ? 3 : 1);
   }
   // distant drifting rocks (belt stage)
-  for (const d of bg.dust) {
-    d.y += d.sp;
-    if (d.y > H + 12) { d.y = -12; d.x = rnd(0, W); }
-    g.drawImage(bg.dustSpr[d.s], Math.floor(d.x), Math.floor(d.y));
-  }
+  for (const d of bg.dust) g.drawImage(bg.dustSpr[d.s], Math.floor(d.x), Math.floor(d.y + d.sp * alpha));
 }
 
 // ------------------------------------------------------------
@@ -225,7 +238,7 @@ function updatePlayer(pad) {
     p.dead--;
     if (p.dead === 0) {
       if (p.lives <= 0) { gameOver(); return; }
-      p.x = W / 2; p.y = H - 30; p.inv = 150; p.bombs = Math.max(p.bombs, 2);
+      p.x = p.px = W / 2; p.y = p.py = H - 30; p.inv = 150; p.bombs = Math.max(p.bombs, 2);
       popText(p.x, p.y - 20, p.lives === 1 ? 'LAST LIFE!' : p.lives + ' LIVES LEFT', p.lives === 1 ? '#ff5050' : '#ffffff', 90);
       resetTrail();
       touch.sx = touch.cx; touch.sy = touch.cy; touch.px = p.x; touch.py = p.y;
@@ -824,6 +837,7 @@ function setPause(v) {
 
 function update() {
   G.t++;
+  updateBG();
   const pad = readPad();
   if (tapped(KB.mute)) Sound.toggleMute();
 
@@ -926,16 +940,21 @@ function endFrameInput() {
 // ------------------------------------------------------------
 //  Rendering
 // ------------------------------------------------------------
+// Interpolated draw position between the last two 60 Hz updates
+const lx = o => (o.px === undefined ? o.x : o.px + (o.x - o.px) * alpha);
+const ly = o => (o.py === undefined ? o.y : o.py + (o.y - o.py) * alpha);
+
 function spr(img, x, y) { ctx.drawImage(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2)); }
 
 function drawPlayer() {
-  const p = P;
-  if (p.dead) return;
+  const p = { x: lx(P), y: ly(P), inv: P.inv, options: P.options, weapon: P.weapon, focus: P.focus, shield: P.shield };
+  const odx = p.x - P.x, ody = p.y - P.y;
+  if (P.dead) return;
   if (p.inv > 0 && (G.t >> 2) % 2 === 0) return;
   // options
   for (let i = 0; i < p.options; i++) {
     const [ox, oy] = optionPos(i);
-    spr(SPR.option[p.weapon], ox, oy + Math.sin(G.t * 0.2 + i) * 1);
+    spr(SPR.option[p.weapon], ox + odx, oy + ody + Math.sin(G.t * 0.2 + i) * 1);
   }
   // engine flame
   const fl = (G.t >> 1) % 2;
@@ -1068,26 +1087,28 @@ function render() {
   for (const it of items) {
     let img = it.kind === 'W' ? SPR.itemW[it.w] : it.kind === 'G' ? SPR.gem : SPR['item' + it.kind];
     const bob = it.kind === 'G' ? 0 : Math.sin(it.t * 0.15) * 1;
-    spr(img, it.x, it.y + bob);
+    spr(img, lx(it), ly(it) + bob);
   }
   // enemies
   for (const e of enemies) {
-    spr(e.flash ? e.spr.white : e.spr, e.x, e.y);
-    if (e.d.carrier && (G.t >> 3) % 2) { ctx.globalAlpha = 0.5; spr(SPR.gold, e.x, e.y); ctx.globalAlpha = 1; }
+    const ex = lx(e), ey = ly(e);
+    spr(e.flash ? e.spr.white : e.spr, ex, ey);
+    if (e.d.carrier && (G.t >> 3) % 2) { ctx.globalAlpha = 0.5; spr(SPR.gold, ex, ey); ctx.globalAlpha = 1; }
   }
   // boss
   if (boss) {
     const b = boss;
-    spr(b.spr, b.x, b.y);
-    if ((b.flash && G.t % 3 === 0) || (b.dying && (G.t >> 2) % 2)) { ctx.globalAlpha = 0.45; spr(b.spr.white, b.x, b.y); ctx.globalAlpha = 1; }
+    const bx = lx(b), by = ly(b);
+    spr(b.spr, bx, by);
+    if ((b.flash && G.t % 3 === 0) || (b.dying && (G.t >> 2) % 2)) { ctx.globalAlpha = 0.45; spr(b.spr.white, bx, by); ctx.globalAlpha = 1; }
   }
   // player shots
-  for (const s of shots) spr(s.spr, s.x, s.y);
+  for (const s of shots) spr(s.spr, lx(s), ly(s));
   if (P) drawPlayer();
   // fx
   for (const f of fx) {
-    if (f.type === 'ex') spr(f.frames[Math.floor(f.f)], f.x, f.y);
-    else if (f.type === 'spark') { ctx.fillStyle = f.col; ctx.fillRect(Math.round(f.x), Math.round(f.y), f.life > 15 ? 2 : 1, f.life > 15 ? 2 : 1); }
+    if (f.type === 'ex') spr(f.frames[Math.floor(f.f)], lx(f), ly(f));
+    else if (f.type === 'spark') { ctx.fillStyle = f.col; ctx.fillRect(Math.round(lx(f)), Math.round(ly(f)), f.life > 15 ? 2 : 1, f.life > 15 ? 2 : 1); }
     else if (f.type === 'ring') {
       ctx.strokeStyle = f.col; ctx.globalAlpha = Math.min(1, f.life / 20);
       ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, TAU); ctx.stroke();
@@ -1095,8 +1116,8 @@ function render() {
     }
   }
   // enemy bullets on top of everything for readability
-  for (const b of ebs) spr(b.spr, b.x, b.y);
-  for (const f of fx) if (f.type === 'text') drawText(ctx, f.str, f.x, f.y, (f.life >> 2) % 2 ? f.col : '#ffffff', 1, 'center');
+  for (const b of ebs) spr(b.spr, lx(b), ly(b));
+  for (const f of fx) if (f.type === 'text') drawText(ctx, f.str, lx(f), ly(f), (f.life >> 2) % 2 ? f.col : '#ffffff', 1, 'center');
   ctx.restore();
 
   if (G.flash) { ctx.fillStyle = `rgba(255,255,255,${G.flash / 16})`; ctx.fillRect(0, 0, W, H); }
@@ -1120,12 +1141,24 @@ function render() {
 // ------------------------------------------------------------
 //  Loop — fixed 60 Hz simulation for consistent feel
 // ------------------------------------------------------------
-let acc = 0, last = performance.now();
+// Fixed 60 Hz simulation; rendering interpolates between the last two steps so
+// motion stays smooth on 120/144 Hz screens and when frames arrive unevenly.
+let acc = 0, last = performance.now(), alpha = 1;
 const STEP = 1000 / 60;
+function snapshot() {
+  G.pscroll = G.scroll;
+  if (P) { P.px = P.x; P.py = P.y; }
+  if (boss) { boss.px = boss.x; boss.py = boss.y; }
+  for (const list of [enemies, shots, ebs, items, fx]) for (const o of list) { o.px = o.x; o.py = o.y; }
+}
 function frame(now) {
-  acc += Math.min(100, now - last);
+  let dt = Math.min(100, now - last);
   last = now;
-  while (acc >= STEP) { update(); acc -= STEP; }
+  // absorb timer jitter so a 60 Hz screen gets exactly one step per frame
+  if (Math.abs(dt - STEP) < 1.5) dt = STEP;
+  acc += dt;
+  while (acc >= STEP) { snapshot(); update(); acc -= STEP; }
+  alpha = acc / STEP;
   render();
   requestAnimationFrame(frame);
 }
